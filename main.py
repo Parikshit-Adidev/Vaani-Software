@@ -11,7 +11,14 @@ Run:
 import streamlit as st
 import numpy as np
 import io, os, base64, json
-import soundfile as sf
+# Prefer soundfile if available, but fall back to librosa/audioread to avoid libsndfile issues on cloud
+try:
+    import soundfile as sf
+    SOUND_FILE_AVAILABLE = True
+except Exception:
+    sf = None
+    SOUND_FILE_AVAILABLE = False
+
 import librosa
 import matplotlib.pyplot as plt
 
@@ -89,12 +96,23 @@ st.markdown(
 # Utilities
 # ---------------------------
 def read_audio_bytes(audio_bytes: bytes):
-    """Return mono float32 array and sample rate."""
-    try:
-        data, sr = sf.read(io.BytesIO(audio_bytes))
-    except Exception:
-        data, sr = librosa.load(io.BytesIO(audio_bytes), sr=None, mono=True)
-        return data.astype(np.float32), sr
+    """
+    Return mono float32 array and sample rate.
+    Uses soundfile (faster) if installed and working; otherwise falls back to librosa/audioread.
+    """
+    # Try soundfile first if available
+    if SOUND_FILE_AVAILABLE:
+        try:
+            data, sr = sf.read(io.BytesIO(audio_bytes))
+            if data.ndim > 1:
+                data = np.mean(data, axis=1)
+            return data.astype(np.float32), sr
+        except Exception:
+            # fallback to librosa below
+            pass
+
+    # librosa fallback (uses audioread backend — pure python)
+    data, sr = librosa.load(io.BytesIO(audio_bytes), sr=None, mono=True)
     if data.ndim > 1:
         data = np.mean(data, axis=1)
     return data.astype(np.float32), sr
@@ -153,7 +171,6 @@ def preprocess_for_model(audio_bytes: bytes, input_details):
                 arr = (x_padded * 32767.0).astype(np.int16)
             elif dtype == np.int8 or dtype == np.int32 or dtype == np.uint8:
                 # use quantization parameters if present
-                # convert float to int range first by scaling to [-32767,32767] then quantize
                 arr_float = x_padded.astype(np.float32)
                 arr = quantize_input(arr_float, inp)
             else:
