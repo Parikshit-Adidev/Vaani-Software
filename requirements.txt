@@ -1,7 +1,7 @@
 streamlit
 numpy
 librosa
-pysoundfile
+audioread
 matplotlib
 joblib
 tensorflow
