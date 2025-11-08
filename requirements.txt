@@ -4,6 +4,5 @@ librosa
 audioread
 matplotlib
 joblib
-tensorflow
-vosk
+tensorflow==2.14.0
 requests
